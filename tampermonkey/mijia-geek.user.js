@@ -4,7 +4,7 @@
 // @version      1.0.0
 // @description  提供类似米家自动化极客版的悬浮窗，执行保存的 curl 命令并展示登录码。
 // @author       Chish
-// @match        http://10.0.0.3/*
+// @match        */*  // 这边自己改中枢的IP，格式 http://x.x.x.x/*
 // @grant        GM_addStyle
 // @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
