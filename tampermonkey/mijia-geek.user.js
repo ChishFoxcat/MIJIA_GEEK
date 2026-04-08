@@ -2,7 +2,7 @@
 // @name         MIJIA GEEK CODE
 // @namespace    https://github.com/ChishFoxcat
 // @version      1.0.0
-// @description  提供类似米家自动化极客版的悬浮窗，执行保存的 curl 命令并展示登录码。
+// @description  提供类似米家自动化极客版的悬浮窗，执行保存的 POST 请求并展示 URL 与登录码。
 // @author       Chish
 // @match        */*  // 这边自己改中枢的IP，格式 http://x.x.x.x/*
 // @grant        GM_addStyle
@@ -17,11 +17,27 @@
   const panelId = 'mijia-passcode-panel';
   const responsePlaceholder = '原始响应会显示在这里。';
   const passcodePlaceholder = '------';
+  const remoteUrlPlaceholder = 'IP:default';
   const storageKeys = {
-    curlCommand: 'curl_command'
+    requestConfig: 'curl_command'
+  };
+  const fixedHeaders = {
+    miotRequestModel: 'xiaomi.gateway.hub1'
   };
   const defaultSettings = {
-    curlCommand: ''
+    requestUrl: '',
+    cookie: '',
+    ipRequestBody: '',
+    passcodeRequestBody: '',
+    accept: '*/*',
+    contentType: 'application/x-www-form-urlencoded',
+    userAgent: '',
+    connection: 'keep-alive',
+    acceptEncoding: 'gzip, deflate, br',
+    acceptLanguage: 'zh-Hans;q=1',
+    operateCommon: '',
+    originFrom: '',
+    xiaomiProtocolFlagCli: ''
   };
   const passcodeKeys = ['passcode', 'passwd', 'password', 'pwd'];
   const icons = {
@@ -30,10 +46,12 @@
     passcode: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.25" cy="14.25" r="3.25"></circle><path d="M11.25 14.25h8m-2 0v2m-3-2v2"></path><path d="M10.25 12.25l5.5-5.5a2.25 2.25 0 1 1 3.18 3.18l-5.5 5.5"></path></svg>',
     copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="7" width="10" height="12" rx="2"></rect><path d="M7 15H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg>',
     fill: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.75" y="4.75" width="14.5" height="14.5" rx="2.25"></rect><path d="M8.5 9.5h7"></path><path d="M8.5 12h7"></path><path d="M8.5 14.5h4.5"></path><path d="m16.5 18.5 3-3"></path><path d="m17 12.5 2.5 2.5-3 3L14 15.5"></path></svg>',
+    refresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>',
     close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"></path><path d="M18 6 6 18"></path></svg>',
     mijia: '<img src="data:image/png;base64,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" alt="米家 logo">'
   };
   let lastPasscode = '';
+  let lastRemoteUrl = '';
   let statusToastTimer = 0;
   let activePanelDragPointerId = null;
   let panelDragOffsetX = 0;
@@ -43,6 +61,10 @@
   let miniToggleDragOffsetY = 0;
   let isMiniToggleDragging = false;
   let suppressMiniToggleClick = false;
+  const outputState = {
+    url: responsePlaceholder,
+    passcode: responsePlaceholder
+  };
 
   GM_addStyle(`
     #${panelId} {
@@ -206,6 +228,33 @@
       gap: 8px;
     }
 
+    #${panelId} .settings-section {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    #${panelId} .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.92);
+      letter-spacing: 0.02em;
+    }
+
+    #${panelId} .field-note {
+      font-size: 12px;
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    #${panelId} .field-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     #${panelId} .field-label {
       display: inline-flex;
       align-items: center;
@@ -278,15 +327,43 @@
     }
 
     #${panelId} .link-box {
-      display: block;
-      padding: 18px 16px;
-      text-align: center;
+      min-height: 60px;
+      padding: 10px 10px 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #${panelId} .url-link {
+      flex: 1;
+      min-width: 0;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       color: #2f7cff;
       text-decoration: underline;
       text-underline-offset: 3px;
+      text-align: center;
+      line-height: 1.35;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    #${panelId} .url-link:not([href]) {
+      color: rgba(255, 255, 255, 0.72);
+      text-decoration: none;
+      cursor: default;
+    }
+
+    #${panelId} .url-refresh-button {
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      flex: 0 0 34px;
+      align-self: center;
+      margin: 0;
     }
 
     #${panelId} .passcode-box {
@@ -344,10 +421,10 @@
 
     #${panelId} .inline-icon-button {
       position: relative;
-      width: 40px;
-      height: 40px;
+      width: 34px;
+      height: 34px;
       border: 0;
-      border-radius: 14px;
+      border-radius: 11px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -485,9 +562,9 @@
     #${panelId} .action-button svg,
     #${panelId} .secondary-button svg,
     #${panelId} .modal-close svg {
-      width: 16px;
-      height: 16px;
-      flex: 0 0 16px;
+      width: 15px;
+      height: 15px;
+      flex: 0 0 15px;
       fill: none;
       stroke: currentColor;
       stroke-width: 1.8;
@@ -497,6 +574,12 @@
 
     #${panelId} .title-badge svg,
     #${panelId} .field-label svg {
+      width: 14px;
+      height: 14px;
+      flex-basis: 14px;
+    }
+
+    #${panelId} .inline-icon-button svg {
       width: 14px;
       height: 14px;
       flex-basis: 14px;
@@ -604,6 +687,10 @@
         padding: 18px 16px 16px;
       }
 
+      #${panelId} .field-grid {
+        grid-template-columns: 1fr;
+      }
+
     }
   `);
 
@@ -627,8 +714,11 @@
           </div>
         </div>
         <label class="field">
-          <span class="field-label">IP 地址</span>
-          <a class="link-box" data-role="current-url" href="#" target="_blank" rel="noopener noreferrer">-</a>
+          <span class="field-label">URL</span>
+          <div class="link-box">
+            <a class="url-link" data-role="remote-url" target="_blank" rel="noopener noreferrer">IP:default</a>
+            <button class="inline-icon-button url-refresh-button" type="button" data-action="fetch-url" data-tooltip="刷新 URL" aria-label="刷新 URL">${icons.refresh}</button>
+          </div>
         </label>
         <div class="field">
           <span class="field-label">
@@ -643,8 +733,8 @@
             </div>
           </div>
         </div>
-        <div class="status" data-role="status">请先打开设置保存 CURL 命令</div>
-        <button class="primary-button" type="button" data-action="fetch">重新获取登录码</button>
+        <div class="status" data-role="status">请先打开设置填写 URL 和独立 POST 参数</div>
+        <button class="primary-button" type="button" data-action="fetch-passcode">重新获取登录码</button>
         <details>
           <summary>查看原始响应</summary>
           <pre data-role="output">${responsePlaceholder}</pre>
@@ -658,12 +748,81 @@
             <div class="modal-title">${icons.settings}<span>设置</span></div>
             <button class="modal-close" type="button" data-action="close-settings" title="关闭">${icons.close}</button>
           </div>
-          <label class="field">
-            <span class="field-label">CURL 命令</span>
-            <div class="textarea-shell">
-              <textarea class="textarea-input" data-setting="curlCommand" placeholder="请粘贴完整 CURL 命令"></textarea>
+          <div class="settings-section">
+            <div class="section-title">1. 要抓取数据的 URL</div>
+            <label class="field">
+              <span class="field-label">URL</span>
+              <input class="text-input" data-setting="requestUrl" placeholder="例如：https://core.api.mijia.tech/app/home/rpc/1234567890" />
+            </label>
+            <div class="field-note">Host 和 domain-refer 会从上面的 URL 自动提取，MIOT-REQUEST-MODEL 固定写入 xiaomi.gateway.hub1。</div>
+          </div>
+          <div class="settings-section">
+            <div class="section-title">2. POST 参数</div>
+            <label class="field">
+              <span class="field-label">URL 接口 POST 数据</span>
+              <div class="textarea-shell">
+                <textarea class="textarea-input" data-setting="ipRequestBody" placeholder="填写获取 URL 的 POST 数据，例如：_nonce=...&data=...&signature=..."></textarea>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field-label">登录码 POST 数据</span>
+              <div class="textarea-shell">
+                <textarea class="textarea-input" data-setting="passcodeRequestBody" placeholder="填写获取登录码的 POST 数据，例如：_nonce=...&data=...&signature=..."></textarea>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field-label">Cookie</span>
+              <div class="textarea-shell">
+                <textarea class="textarea-input" data-setting="cookie" placeholder="填写请求所需 Cookie"></textarea>
+              </div>
+            </label>
+          </div>
+          <div class="settings-section">
+            <div class="section-title">客户端伪装</div>
+            <div class="field-grid">
+              <label class="field">
+                <span class="field-label">Accept</span>
+                <input class="text-input" data-setting="accept" placeholder="*/*" />
+              </label>
+              <label class="field">
+                <span class="field-label">Content-Type</span>
+                <input class="text-input" data-setting="contentType" placeholder="application/x-www-form-urlencoded" />
+              </label>
+              <label class="field">
+                <span class="field-label">User-Agent</span>
+                <input class="text-input" data-setting="userAgent" placeholder="填写客户端 User-Agent" />
+              </label>
+              <label class="field">
+                <span class="field-label">Connection</span>
+                <input class="text-input" data-setting="connection" placeholder="keep-alive" />
+              </label>
+              <label class="field">
+                <span class="field-label">Accept-Encoding</span>
+                <input class="text-input" data-setting="acceptEncoding" placeholder="gzip, deflate, br" />
+              </label>
+              <label class="field">
+                <span class="field-label">Accept-Language</span>
+                <input class="text-input" data-setting="acceptLanguage" placeholder="zh-Hans;q=1" />
+              </label>
             </div>
-          </label>
+          </div>
+          <div class="settings-section">
+            <div class="section-title">设备单独设置</div>
+            <div class="field-grid">
+              <label class="field">
+                <span class="field-label">operate-common</span>
+                <input class="text-input" data-setting="operateCommon" placeholder="填写设备 operate-common" />
+              </label>
+              <label class="field">
+                <span class="field-label">Origin-From</span>
+                <input class="text-input" data-setting="originFrom" placeholder="例如：MiHome" />
+              </label>
+              <label class="field">
+                <span class="field-label">X-XIAOMI-PROTOCAL-FLAG-CLI</span>
+                <input class="text-input" data-setting="xiaomiProtocolFlagCli" placeholder="例如：PROTOCAL-HTTP2" />
+              </label>
+            </div>
+          </div>
           <div class="secondary-actions">
             <button class="action-button" type="button" data-action="clear-saved">删除已保存设置</button>
             <button class="action-button" type="button" data-action="clear">清空结果</button>
@@ -679,20 +838,28 @@
   document.body.appendChild(panel);
 
   const fields = {
-    curlCommand: panel.querySelector('[data-setting="curlCommand"]')
+    requestUrl: panel.querySelector('[data-setting="requestUrl"]'),
+    cookie: panel.querySelector('[data-setting="cookie"]'),
+    ipRequestBody: panel.querySelector('[data-setting="ipRequestBody"]'),
+    passcodeRequestBody: panel.querySelector('[data-setting="passcodeRequestBody"]'),
+    accept: panel.querySelector('[data-setting="accept"]'),
+    contentType: panel.querySelector('[data-setting="contentType"]'),
+    userAgent: panel.querySelector('[data-setting="userAgent"]'),
+    connection: panel.querySelector('[data-setting="connection"]'),
+    acceptEncoding: panel.querySelector('[data-setting="acceptEncoding"]'),
+    acceptLanguage: panel.querySelector('[data-setting="acceptLanguage"]'),
+    operateCommon: panel.querySelector('[data-setting="operateCommon"]'),
+    originFrom: panel.querySelector('[data-setting="originFrom"]'),
+    xiaomiProtocolFlagCli: panel.querySelector('[data-setting="xiaomiProtocolFlagCli"]')
   };
   const passcodeNode = panel.querySelector('[data-role="passcode"]');
   const statusNode = panel.querySelector('[data-role="status"]');
   const outputNode = panel.querySelector('[data-role="output"]');
-  const currentUrlNode = panel.querySelector('[data-role="current-url"]');
+  const remoteUrlNode = panel.querySelector('[data-role="remote-url"]');
   const settingsModalNode = panel.querySelector('[data-role="settings-modal"]');
   const miniToggleButtonNode = panel.querySelector('[data-role="mini-toggle-button"]');
   const panelTitleNode = panel.querySelector('[data-role="panel-title"]');
   const statusToastNode = panel.querySelector('[data-role="status-toast"]');
-
-  function getStorageScopeId() {
-    return `${window.location.origin}${window.location.pathname}${window.location.hash}`;
-  }
 
   function readCookieValue(name) {
     const cookiePrefix = `${encodeURIComponent(name)}=`;
@@ -707,11 +874,95 @@
     return decodeURIComponent(cookiePart.slice(cookiePrefix.length));
   }
 
+  function normalizeSettings(settings) {
+    const normalizedSettings = { ...defaultSettings };
+
+    if (!settings || typeof settings !== 'object') {
+      return normalizedSettings;
+    }
+
+    for (const key of Object.keys(defaultSettings)) {
+      if (typeof settings[key] === 'string') {
+        normalizedSettings[key] = settings[key];
+      }
+    }
+
+    return normalizedSettings;
+  }
+
   function encodeStoredSettings(settings) {
     return JSON.stringify({
-      scope: getStorageScopeId(),
-      curlCommand: settings.curlCommand
+      settings: normalizeSettings(settings)
     });
+  }
+
+  function readHeaderValue(headers, targetName) {
+    const targetNameLower = targetName.toLowerCase();
+    for (const [headerName, headerValue] of Object.entries(headers)) {
+      if (headerName.toLowerCase() === targetNameLower) {
+        return headerValue;
+      }
+    }
+    return '';
+  }
+
+  function safeDecodeURIComponent(value) {
+    try {
+      return decodeURIComponent(value);
+    } catch (error) {
+      return value;
+    }
+  }
+
+  function detectLegacyRequestKind(data) {
+    const decodedData = safeDecodeURIComponent(data || '');
+
+    if (decodedData.includes('miIO.get_autowebconfig_url')) {
+      return 'url';
+    }
+
+    if (decodedData.includes('miIO.get_central_link_passcode')) {
+      return 'passcode';
+    }
+
+    return '';
+  }
+
+  function migrateCurlCommandToSettings(command) {
+    if (!command) {
+      return { ...defaultSettings };
+    }
+
+    try {
+      const request = parseCurlCommand(command);
+      const migratedSettings = {
+        ...defaultSettings,
+        requestUrl: request.url,
+        cookie: readHeaderValue(request.headers, 'Cookie'),
+        accept: readHeaderValue(request.headers, 'Accept') || defaultSettings.accept,
+        contentType: readHeaderValue(request.headers, 'Content-Type') || defaultSettings.contentType,
+        userAgent: readHeaderValue(request.headers, 'User-Agent'),
+        connection: readHeaderValue(request.headers, 'Connection') || defaultSettings.connection,
+        acceptEncoding: readHeaderValue(request.headers, 'Accept-Encoding') || defaultSettings.acceptEncoding,
+        acceptLanguage: readHeaderValue(request.headers, 'Accept-Language') || defaultSettings.acceptLanguage,
+        operateCommon: readHeaderValue(request.headers, 'operate-common'),
+        originFrom: readHeaderValue(request.headers, 'Origin-From'),
+        xiaomiProtocolFlagCli: readHeaderValue(request.headers, 'X-XIAOMI-PROTOCAL-FLAG-CLI')
+      };
+      const requestKind = detectLegacyRequestKind(request.data);
+
+      if (requestKind === 'url') {
+        migratedSettings.ipRequestBody = request.data || '';
+      }
+
+      if (requestKind === 'passcode') {
+        migratedSettings.passcodeRequestBody = request.data || '';
+      }
+
+      return migratedSettings;
+    } catch (error) {
+      return { ...defaultSettings };
+    }
   }
 
   function decodeStoredSettings(rawValue) {
@@ -721,14 +972,18 @@
 
     try {
       const parsedValue = JSON.parse(rawValue);
-      if (parsedValue && typeof parsedValue === 'object' && typeof parsedValue.curlCommand === 'string') {
-        if (!parsedValue.scope || parsedValue.scope === getStorageScopeId()) {
-          return { curlCommand: parsedValue.curlCommand };
+
+      if (parsedValue && typeof parsedValue === 'object') {
+        if (parsedValue.settings && typeof parsedValue.settings === 'object') {
+          return normalizeSettings(parsedValue.settings);
         }
-        return { ...defaultSettings };
+
+        if (typeof parsedValue.curlCommand === 'string') {
+          return migrateCurlCommandToSettings(parsedValue.curlCommand);
+        }
       }
     } catch (error) {
-      return { curlCommand: rawValue };
+      return migrateCurlCommandToSettings(rawValue);
     }
 
     return { ...defaultSettings };
@@ -769,39 +1024,89 @@
     passcodeNode.textContent = value;
   }
 
-  function getCurrentPageUrl() {
-    return window.location.href;
+  function setRemoteUrl(value) {
+    const nextValue = value || remoteUrlPlaceholder;
+    const isHttpUrl = /^https?:\/\//i.test(nextValue);
+    remoteUrlNode.textContent = nextValue;
+
+    if (isHttpUrl) {
+      remoteUrlNode.href = nextValue;
+      return;
+    }
+
+    remoteUrlNode.removeAttribute('href');
   }
 
-  function getDisplayUrl() {
-    return `${window.location.origin}/`;
+  function renderOutput() {
+    const hasResponse =
+      outputState.url !== responsePlaceholder ||
+      outputState.passcode !== responsePlaceholder;
+
+    if (!hasResponse) {
+      outputNode.textContent = responsePlaceholder;
+      return;
+    }
+
+    outputNode.textContent = [
+      '[URL 接口响应]',
+      outputState.url,
+      '',
+      '[登录码接口响应]',
+      outputState.passcode
+    ].join('\n');
   }
 
-  function refreshCurrentUrl() {
-    currentUrlNode.href = getCurrentPageUrl();
-    currentUrlNode.textContent = getDisplayUrl();
+  function setOutputSection(section, value) {
+    outputState[section] = value || responsePlaceholder;
+    renderOutput();
   }
 
   function collectSettings() {
     return {
-      curlCommand: fields.curlCommand.value.trim()
+      requestUrl: fields.requestUrl.value.trim(),
+      cookie: fields.cookie.value.trim(),
+      ipRequestBody: fields.ipRequestBody.value.trim(),
+      passcodeRequestBody: fields.passcodeRequestBody.value.trim(),
+      accept: fields.accept.value.trim(),
+      contentType: fields.contentType.value.trim(),
+      userAgent: fields.userAgent.value.trim(),
+      connection: fields.connection.value.trim(),
+      acceptEncoding: fields.acceptEncoding.value.trim(),
+      acceptLanguage: fields.acceptLanguage.value.trim(),
+      operateCommon: fields.operateCommon.value.trim(),
+      originFrom: fields.originFrom.value.trim(),
+      xiaomiProtocolFlagCli: fields.xiaomiProtocolFlagCli.value.trim()
     };
   }
 
   function applySettings(settings) {
-    fields.curlCommand.value = settings.curlCommand;
+    const nextSettings = normalizeSettings(settings);
+
+    fields.requestUrl.value = nextSettings.requestUrl;
+    fields.cookie.value = nextSettings.cookie;
+    fields.ipRequestBody.value = nextSettings.ipRequestBody;
+    fields.passcodeRequestBody.value = nextSettings.passcodeRequestBody;
+    fields.accept.value = nextSettings.accept;
+    fields.contentType.value = nextSettings.contentType;
+    fields.userAgent.value = nextSettings.userAgent;
+    fields.connection.value = nextSettings.connection;
+    fields.acceptEncoding.value = nextSettings.acceptEncoding;
+    fields.acceptLanguage.value = nextSettings.acceptLanguage;
+    fields.operateCommon.value = nextSettings.operateCommon;
+    fields.originFrom.value = nextSettings.originFrom;
+    fields.xiaomiProtocolFlagCli.value = nextSettings.xiaomiProtocolFlagCli;
   }
 
   function loadSettings() {
-    return decodeStoredSettings(readCookieValue(storageKeys.curlCommand));
+    return decodeStoredSettings(readCookieValue(storageKeys.requestConfig));
   }
 
   function saveSettings(settings) {
-    writeCookieValue(storageKeys.curlCommand, encodeStoredSettings(settings));
+    writeCookieValue(storageKeys.requestConfig, encodeStoredSettings(settings));
   }
 
   function deleteSavedSettings() {
-    deleteCookieValue(storageKeys.curlCommand);
+    deleteCookieValue(storageKeys.requestConfig);
   }
 
   function saveCurrentSettings(showMessage) {
@@ -815,10 +1120,13 @@
 
   function clearResultState(showToast = true) {
     lastPasscode = '';
+    lastRemoteUrl = '';
     setPasscodeResult(passcodePlaceholder, false);
-    outputNode.textContent = responsePlaceholder;
-    setStatus('登录码已清空', showToast);
-    refreshCurrentUrl();
+    setRemoteUrl(remoteUrlPlaceholder);
+    outputState.url = responsePlaceholder;
+    outputState.passcode = responsePlaceholder;
+    renderOutput();
+    setStatus('URL 和登录码已清空', showToast);
   }
 
   function clearSavedSettings() {
@@ -1063,6 +1371,74 @@
     return request;
   }
 
+  function appendHeaderIfPresent(headers, name, value) {
+    if (value) {
+      headers[name] = value;
+    }
+  }
+
+  function getRequestUrlObject(requestUrl) {
+    try {
+      return new URL(requestUrl);
+    } catch (error) {
+      throw new Error('URL 格式不正确，请填写完整的 http 或 https 地址');
+    }
+  }
+
+  function buildCommonRequestConfig(settings, requestBody) {
+    const requestUrlObject = getRequestUrlObject(settings.requestUrl);
+    const host = requestUrlObject.host;
+    const headers = {
+      Host: host,
+      'domain-refer': host,
+      'MIOT-REQUEST-MODEL': fixedHeaders.miotRequestModel
+    };
+
+    appendHeaderIfPresent(headers, 'Accept', settings.accept);
+    appendHeaderIfPresent(headers, 'Content-Type', settings.contentType);
+    appendHeaderIfPresent(headers, 'User-Agent', settings.userAgent);
+    appendHeaderIfPresent(headers, 'Connection', settings.connection);
+    appendHeaderIfPresent(headers, 'Accept-Encoding', settings.acceptEncoding);
+    appendHeaderIfPresent(headers, 'Accept-Language', settings.acceptLanguage);
+    appendHeaderIfPresent(headers, 'Cookie', settings.cookie);
+    appendHeaderIfPresent(headers, 'operate-common', settings.operateCommon);
+    appendHeaderIfPresent(headers, 'Origin-From', settings.originFrom);
+    appendHeaderIfPresent(headers, 'X-XIAOMI-PROTOCAL-FLAG-CLI', settings.xiaomiProtocolFlagCli);
+
+    return {
+      method: 'POST',
+      url: requestUrlObject.toString(),
+      headers,
+      data: requestBody
+    };
+  }
+
+  function requestWithTampermonkey(requestConfig) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: requestConfig.method,
+        url: requestConfig.url,
+        headers: requestConfig.headers,
+        data: requestConfig.data,
+        timeout: 30000,
+        onload(response) {
+          resolve(response);
+        },
+        onerror(error) {
+          reject({
+            type: 'error',
+            detail: error
+          });
+        },
+        ontimeout() {
+          reject({
+            type: 'timeout'
+          });
+        }
+      });
+    });
+  }
+
   function parseResponseAsJson(responseText, responseHeaders) {
     const contentTypeLine = responseHeaders
       .split(/\r?\n/)
@@ -1122,6 +1498,50 @@
     return '';
   }
 
+  function findUrlValue(value) {
+    if (value === null || typeof value === 'undefined') {
+      return '';
+    }
+
+    if (typeof value === 'string') {
+      const trimmedValue = value.trim();
+      const urlMatch = trimmedValue.match(/https?:\/\/[^\s"'<>]+/i);
+      return urlMatch ? urlMatch[0] : '';
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const nestedValue = findUrlValue(item);
+        if (nestedValue) {
+          return nestedValue;
+        }
+      }
+      return '';
+    }
+
+    if (typeof value === 'object') {
+      const directKeys = ['url', 'ipUrl', 'ip_url', 'link', 'autowebconfig_url', 'webConfigUrl'];
+
+      for (const key of directKeys) {
+        if (Object.prototype.hasOwnProperty.call(value, key)) {
+          const directValue = findUrlValue(value[key]);
+          if (directValue) {
+            return directValue;
+          }
+        }
+      }
+
+      for (const child of Object.values(value)) {
+        const nestedValue = findUrlValue(child);
+        if (nestedValue) {
+          return nestedValue;
+        }
+      }
+    }
+
+    return '';
+  }
+
   function formatResponseText(responseText, parsedJson) {
     if (!parsedJson) {
       return responseText || responsePlaceholder;
@@ -1141,7 +1561,6 @@
   function collapsePanel() {
     panel.classList.add('is-collapsed');
     closeSettingsModal();
-    refreshCurrentUrl();
   }
 
   function clampValue(value, min, max) {
@@ -1305,70 +1724,154 @@
     return /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent) ? 'Cmd+V' : 'Ctrl+V';
   }
 
-  function executeSavedCurl(triggerSource) {
-    refreshCurrentUrl();
+  function formatRequestFailure(error) {
+    if (error?.type === 'timeout') {
+      return '远程服务在 30 秒内没有返回结果';
+    }
+
+    if (error?.detail) {
+      return JSON.stringify(error.detail, null, 2);
+    }
+
+    return '请求失败';
+  }
+
+  function getRequestPreset(kind) {
+    if (kind === 'url') {
+      return {
+        bodyKey: 'ipRequestBody',
+        outputKey: 'url',
+        loadingText: 'URL 获取中...',
+        missingText: '请先填写 URL 接口 POST 数据',
+        triggerLabel: 'URL',
+        successText: 'URL 已刷新',
+        emptyText: 'URL 未获取到，请检查 URL 接口 POST 数据'
+      };
+    }
+
+    return {
+      bodyKey: 'passcodeRequestBody',
+      outputKey: 'passcode',
+      loadingText: '登录码获取中...',
+      missingText: '请先填写登录码 POST 数据',
+      triggerLabel: '登录码',
+      successText: '登录码已刷新',
+      emptyText: '登录码未获取到，请检查登录码 POST 数据'
+    };
+  }
+
+  function resetRequestDisplay(kind) {
+    if (kind === 'url') {
+      lastRemoteUrl = '';
+      setRemoteUrl(remoteUrlPlaceholder);
+      setOutputSection('url', responsePlaceholder);
+      return;
+    }
+
+    lastPasscode = '';
+    setPasscodeResult(passcodePlaceholder, false);
+    setOutputSection('passcode', responsePlaceholder);
+  }
+
+  async function executeSavedPost(kind, triggerSource) {
     const settings = saveCurrentSettings(false);
+    const requestPreset = getRequestPreset(kind);
+    const requestBody = settings[requestPreset.bodyKey];
 
-    if (!settings.curlCommand) {
-      lastPasscode = '';
-      setPasscodeResult(passcodePlaceholder, false);
-      outputNode.textContent = responsePlaceholder;
-      setStatus('没有 CURL 命令，请添加');
+    if (!settings.requestUrl) {
+      resetRequestDisplay(kind);
+      setStatus('没有 URL，请先填写');
       return;
     }
 
-    let requestConfig;
+    if (!requestBody) {
+      resetRequestDisplay(kind);
+      setStatus(requestPreset.missingText);
+      return;
+    }
+
+    let commonRequestConfig;
     try {
-      requestConfig = parseCurlCommand(settings.curlCommand);
+      commonRequestConfig = buildCommonRequestConfig(settings, '');
     } catch (error) {
-      lastPasscode = '';
-      setPasscodeResult('CURL 命令无法解析', false);
-      outputNode.textContent = error.message;
-      setStatus(`解析失败：${error.message}`);
+      resetRequestDisplay(kind);
+      setStatus(error.message);
       return;
     }
 
-    setPasscodeResult('登录码获取中...', false);
-    outputNode.textContent = '请求中...';
-    setStatus(`${triggerSource}，正在执行 CURL 命令...`);
+    if (kind === 'url') {
+      lastRemoteUrl = '';
+      setRemoteUrl(requestPreset.loadingText);
+    } else {
+      lastPasscode = '';
+      setPasscodeResult(requestPreset.loadingText, false);
+    }
 
-    GM_xmlhttpRequest({
-      method: requestConfig.method,
-      url: requestConfig.url,
-      headers: requestConfig.headers,
-      data: requestConfig.data,
-      timeout: 30000,
-      onload(response) {
-        const parsedJson = parseResponseAsJson(response.responseText, response.responseHeaders || '');
-        const formattedText = formatResponseText(response.responseText, parsedJson);
-        const passcode = parsedJson ? findPasscodeValue(parsedJson.result?.passcode ?? parsedJson.passcode ?? parsedJson) : '';
+    setOutputSection(requestPreset.outputKey, '请求中...');
+    setStatus(`${triggerSource}，正在请求${requestPreset.triggerLabel}...`);
 
-        outputNode.textContent = formattedText;
+    try {
+      const response = await requestWithTampermonkey({
+        ...commonRequestConfig,
+        data: requestBody
+      });
+      const parsedJson = parseResponseAsJson(response.responseText, response.responseHeaders || '');
+      const formattedText = formatResponseText(response.responseText, parsedJson);
 
-        if (!passcode) {
-          lastPasscode = '';
-          setPasscodeResult('未提取到 passcode', false);
-          setStatus(`未在响应中找到 passcode`);
+      setOutputSection(requestPreset.outputKey, formattedText);
+
+      if (kind === 'url') {
+        const remoteUrl = findUrlValue(parsedJson?.result ?? parsedJson ?? response.responseText);
+
+        if (remoteUrl) {
+          lastRemoteUrl = remoteUrl;
+          setRemoteUrl(remoteUrl);
+          setStatus(requestPreset.successText);
           return;
         }
 
+        lastRemoteUrl = '';
+        setRemoteUrl(remoteUrlPlaceholder);
+        setStatus(requestPreset.emptyText);
+        return;
+      }
+
+      const passcode = parsedJson ? findPasscodeValue(parsedJson.result?.passcode ?? parsedJson.passcode ?? parsedJson) : '';
+
+      if (passcode) {
         lastPasscode = passcode;
         setPasscodeResult(passcode, true);
-        setStatus(`已获取到登录码`);
-      },
-      onerror(error) {
-        lastPasscode = '';
-        setPasscodeResult('请求失败', false);
-        outputNode.textContent = JSON.stringify(error, null, 2);
-        setStatus('请求失败，请检查 CURL 命令、Cookie 或网络环境');
-      },
-      ontimeout() {
-        lastPasscode = '';
-        setPasscodeResult('请求超时', false);
-        outputNode.textContent = '远程服务在 30 秒内没有返回结果';
-        setStatus('请求超时。');
+        setStatus(requestPreset.successText);
+        return;
       }
-    });
+
+      lastPasscode = '';
+      setPasscodeResult('未提取到 passcode', false);
+      setStatus(requestPreset.emptyText);
+    } catch (error) {
+      if (kind === 'url') {
+        lastRemoteUrl = '';
+        setRemoteUrl(remoteUrlPlaceholder);
+      } else {
+        lastPasscode = '';
+        setPasscodeResult(error?.type === 'timeout' ? '请求超时' : '请求失败', false);
+      }
+
+      setOutputSection(requestPreset.outputKey, formatRequestFailure(error));
+      setStatus(`${requestPreset.triggerLabel}请求失败，请检查对应 POST 参数`);
+    }
+  }
+
+  function executeAutoFetchOnOpen() {
+    const settings = loadSettings();
+
+    if (settings.ipRequestBody) {
+      executeSavedPost('url', '打开面板后自动获取 URL');
+    }
+
+    if (settings.passcodeRequestBody) {
+      executeSavedPost('passcode', '打开面板后自动获取登录码');
+    }
   }
 
   function copyPasscodeToClipboard(showStatus) {
@@ -1536,7 +2039,6 @@
   function togglePanel() {
     const shouldOpen = panel.classList.contains('is-collapsed');
     panel.classList.toggle('is-collapsed');
-    refreshCurrentUrl();
 
     if (!shouldOpen) {
       closeSettingsModal();
@@ -1544,7 +2046,7 @@
 
     if (shouldOpen) {
       window.requestAnimationFrame(clampPanelToViewport);
-      executeSavedCurl('打开面板后自动执行');
+      executeAutoFetchOnOpen();
     }
   }
 
@@ -1598,8 +2100,13 @@
       return;
     }
 
-    if (action === 'fetch') {
-      executeSavedCurl('手动重新获取登录码');
+    if (action === 'fetch-url') {
+      executeSavedPost('url', '手动获取 URL');
+      return;
+    }
+
+    if (action === 'fetch-passcode') {
+      executeSavedPost('passcode', '手动获取登录码');
       return;
     }
 
@@ -1614,6 +2121,6 @@
   });
 
   applySettings(loadSettings());
-  refreshCurrentUrl();
+  setRemoteUrl(remoteUrlPlaceholder);
   clearResultState(false);
 })();
