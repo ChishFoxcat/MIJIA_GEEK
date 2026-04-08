@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MIJIA GEEK CODE
 // @namespace    https://github.com/ChishFoxcat
-// @version      1.0.0
+// @version      1.1.0
 // @description  提供类似米家自动化极客版的悬浮窗，执行保存的 POST 请求并展示 URL 与登录码。
 // @author       Chish
 // @match        */*  // 这边自己改中枢的IP，格式 http://x.x.x.x/*
