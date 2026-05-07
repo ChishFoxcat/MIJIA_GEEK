@@ -1817,7 +1817,7 @@
         data: requestBody
       });
       let parsedJson = parseResponseAsJson(response.responseText, response.responseHeaders || '');
-      if(!parsedJson && !response.responseText.includes('message')){
+      if(!parsedJson || !response.responseText.includes('message')){
           const requestParams = new URLSearchParams(requestBody);
           const _nonce = requestParams.get('_nonce');
           const ssecurity = requestParams.get('ssecurity');
