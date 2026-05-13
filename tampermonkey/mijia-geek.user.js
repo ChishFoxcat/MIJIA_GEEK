@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         MIJIA GEEK CODE
 // @namespace    https://github.com/ChishFoxcat
-// @version      1.1.0
+// @version      1.1.1
 // @description  提供类似米家自动化极客版的悬浮窗，执行保存的 POST 请求并展示 URL 与登录码。
 // @author       Chish
 // @match        */*  // 这边自己改中枢的IP，格式 http://x.x.x.x/*
 // @grant        GM_addStyle
 // @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
+// @require      https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js
 // 严禁未注明的转载，此脚本为学习使用，请在24小时内删除，使用出现各种异常均不负任何责任
 // ==/UserScript==
 
@@ -1815,7 +1816,15 @@
         ...commonRequestConfig,
         data: requestBody
       });
-      const parsedJson = parseResponseAsJson(response.responseText, response.responseHeaders || '');
+      let parsedJson = parseResponseAsJson(response.responseText, response.responseHeaders || '');
+      if(!parsedJson || !response.responseText.includes('message')){
+          const requestParams = new URLSearchParams(requestBody);
+          const _nonce = requestParams.get('_nonce');
+          const ssecurity = requestParams.get('ssecurity');
+          const sn = signed_nonce(ssecurity, _nonce);
+          const resultBytes = decrypt_data(sn, response.responseText);
+          parsedJson = JSON.parse(new TextDecoder().decode(resultBytes));
+      }
       const formattedText = formatResponseText(response.responseText, parsedJson);
 
       setOutputSection(requestPreset.outputKey, formattedText);
@@ -2123,4 +2132,72 @@
   applySettings(loadSettings());
   setRemoteUrl(remoteUrlPlaceholder);
   clearResultState(false);
+
+
+    class RC4 {
+        constructor(keyBytes) {
+            this.keyBytes = keyBytes;
+            this.reset();
+        }
+
+        reset() {
+            const s = new Uint8Array(256);
+            for (let i = 0; i < 256; i++) s[i] = i;
+            let j = 0;
+            const key = this.keyBytes;
+            const keyLen = key.length;
+            for (let i = 0; i < 256; i++) {
+                j = (j + s[i] + key[i % keyLen]) & 0xff;
+                [s[i], s[j]] = [s[j], s[i]];
+            }
+
+            this.s = s;
+            this.i = 0;
+            this.j = 0;
+            return this;
+        }
+
+        crypt(dataBytes) {
+            const out = new Uint8Array(dataBytes.length);
+            let s = this.s;
+            let i = this.i;
+            let j = this.j;
+
+            for (let idx = 0; idx < dataBytes.length; idx++) {
+                i = (i + 1) & 0xff;
+                j = (j + s[i]) & 0xff;
+                [s[i], s[j]] = [s[j], s[i]];
+                const keystream = s[(s[i] + s[j]) & 0xff];
+                out[idx] = dataBytes[idx] ^ keystream;
+            }
+
+            this.s = s;
+            this.i = i;
+            this.j = j;
+            return out;
+        }
+
+        init1024() {
+            const dummy = new Uint8Array(1024);
+            this.crypt(dummy);
+            return this;
+        }
+    }
+
+    function decrypt_data(pwd, data) {
+        const keyBytes = Uint8Array.from(atob(pwd), c => c.charCodeAt(0));
+        const cipherBytes = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+        const rc4 = new RC4(keyBytes);
+        const plainBytes = rc4.init1024().crypt(cipherBytes);
+        return plainBytes;
+    }
+
+    function signed_nonce(ssecret, nonce) {
+        const secretWA = CryptoJS.enc.Base64.parse(ssecret);
+        const nonceWA   = CryptoJS.enc.Base64.parse(nonce);
+        const combined = secretWA.concat(nonceWA);
+        const hash = CryptoJS.SHA256(combined);
+        return CryptoJS.enc.Base64.stringify(hash);
+    }
+
 })();
